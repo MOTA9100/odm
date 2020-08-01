@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace MOTA9100\ODM;
 
+use Doctrine\Common\Cache\VoidCache;
 use Doctrine\Common\EventManager;
 use MOTA9100\ODM\Hydrator\HydratorFactory;
 use MOTA9100\ODM\Mapping\ClassMetadata;
 use MOTA9100\ODM\Mapping\ClassMetadataFactory;
+use MOTA9100\ODM\Mapping\Driver\AnnotationDriver;
 use MOTA9100\ODM\Mapping\MappingException;
 use MOTA9100\ODM\Proxy\Factory\ProxyFactory;
 use MOTA9100\ODM\Proxy\Factory\StaticProxyFactory;
@@ -156,6 +158,13 @@ class DocumentManager implements ObjectManager
     /**
      * Creates a new Document that operates on the given Mongo connection
      * and uses the given Configuration.
+     *
+     * DocumentManager constructor.
+     * @param Client|null $client
+     * @param Configuration|null $config
+     * @param EventManager|null $eventManager
+     * @throws Hydrator\HydratorException
+     * @throws MongoDBException
      */
     protected function __construct(?Client $client = null, ?Configuration $config = null, ?EventManager $eventManager = null)
     {
@@ -214,9 +223,38 @@ class DocumentManager implements ObjectManager
     /**
      * Creates a new Document that operates on the given Mongo connection
      * and uses the given Configuration.
+     *
+     * @param Client|null $client
+     * @param Configuration|null $config
+     * @param EventManager|null $eventManager
+     * @return DocumentManager
+     * @throws Hydrator\HydratorException
+     * @throws MongoDBException
      */
-    public static function create(?Client $client = null, ?Configuration $config = null, ?EventManager $eventManager = null) : DocumentManager
-    {
+    public static function create(?Client $client = null, ?Configuration $config = null, ?EventManager $eventManager = null) : DocumentManager {
+
+        $app_config = config('doctrine');
+        $connection_config = config('database.connections.mongodb', []);
+
+        $port = $connection_config['port'] ? ':' . $connection_config['port'] : '';
+
+        $client = new Client(
+            'mongodb://' . $connection_config['host'] . $port,
+            $connection_config['uri_options'],
+            $connection_config['driver_options']
+        );
+
+        // Setup the Doctrine configuration object
+        $config = new Configuration();
+        $config->setProxyDir($app_config['proxies']['path']);
+        $config->setProxyNamespace($app_config['proxies']['namespace']);
+        $config->setHydratorDir($app_config['hydrators']['path']);
+        $config->setHydratorNamespace($app_config['hydrators']['namespace']);
+        $config->setMetadataDriverImpl(AnnotationDriver::create($app_config['documents']['path']));
+        $config->setMetadataCacheImpl(new VoidCache());
+
+        $eventManager = $eventManager ?? new EventManager();
+
         return new static($client, $config, $eventManager);
     }
 
