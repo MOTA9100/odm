@@ -13,12 +13,13 @@ use MOTA9100\ODM\Iterator\Iterator;
 use MOTA9100\ODM\LockException;
 use MOTA9100\ODM\LockMode;
 use MOTA9100\ODM\Mapping\ClassMetadata;
-use MOTA9100\ODM\Mapping\MappingException;
+use MOTA9100\ODM\MongoDBException;
 use MOTA9100\ODM\Persisters\DocumentPersister;
 use MOTA9100\ODM\Query\Builder as QueryBuilder;
 use MOTA9100\ODM\Query\QueryExpressionVisitor;
 use MOTA9100\ODM\UnitOfWork;
 use Doctrine\Persistence\ObjectRepository;
+use MOTA9100\ODM\Contracts\DocumentRepository as DocumentRepositoryIntFace;
 use function assert;
 use function count;
 use function is_array;
@@ -30,8 +31,8 @@ use function is_array;
  * This class is designed for inheritance and users can subclass this class to
  * write their own repositories with business-specific methods to locate documents.
  */
-class DocumentRepository implements ObjectRepository, Selectable
-{
+class DocumentRepository implements ObjectRepository, Selectable, DocumentRepositoryIntFace {
+
     /** @var string */
     protected $documentName;
 
@@ -61,25 +62,31 @@ class DocumentRepository implements ObjectRepository, Selectable
 
     /**
      * Creates a new Query\Builder instance that is preconfigured for this document name.
+     *
+     * @return QueryBuilder
      */
-    public function createQueryBuilder() : QueryBuilder
-    {
+    public function createQueryBuilder() : QueryBuilder {
+
         return $this->dm->createQueryBuilder($this->documentName);
     }
 
     /**
      * Creates a new Aggregation\Builder instance that is prepopulated for this document name.
+     *
+     * @return AggregationBuilder
      */
-    public function createAggregationBuilder() : AggregationBuilder
-    {
+    public function createAggregationBuilder() : AggregationBuilder {
+
         return $this->dm->createAggregationBuilder($this->documentName);
     }
 
     /**
      * Clears the repository, causing all managed documents to become detached.
+     *
+     * @return void
      */
-    public function clear() : void
-    {
+    public function clear() : void {
+
         $this->dm->clear($this->class->rootDocumentName);
     }
 
@@ -88,12 +95,16 @@ class DocumentRepository implements ObjectRepository, Selectable
      * expected version may be specified.
      *
      * @param mixed $id Identifier.
+     * @param int $lockMode
+     * @param int|null $lockVersion
+     * @param bool $withTrash
      *
-     * @throws MappingException
-     * @throws LockException
+     * @return object
+     *@throws LockException
+     *
      */
-    public function find($id, int $lockMode = LockMode::NONE, ?int $lockVersion = null) : ?object
-    {
+    private function doFind($id, int $lockMode = LockMode::NONE, ?int $lockVersion = null, bool $withTrash = false) : ?object {
+
         if ($id === null) {
             return null;
         }
@@ -122,7 +133,7 @@ class DocumentRepository implements ObjectRepository, Selectable
         $criteria = ['_id' => $id];
 
         if ($lockMode === LockMode::NONE) {
-            return $this->getDocumentPersister()->load($criteria);
+            return $this->getDocumentPersister()->load($criteria, null, [], 0, null, $withTrash);
         }
 
         if ($lockMode === LockMode::OPTIMISTIC) {
@@ -142,44 +153,119 @@ class DocumentRepository implements ObjectRepository, Selectable
     }
 
     /**
-     * Finds all documents in the repository.
+     * @param mixed $id
+     * @param int $lockMode
+     * @param int|null $lockVersion
+     *
+     * @return object|null
+     * @throws LockException
      */
-    public function findAll() : array
-    {
+    public function find($id, int $lockMode = LockMode::NONE, ?int $lockVersion = null) {
+
+        return $this->doFind($id, $lockMode, $lockVersion);
+    }
+
+    /**
+     * @param $id
+     * @param int $lockMode
+     * @param int|null $lockVersion
+     *
+     * @return object|null
+     * @throws LockException
+     */
+    public function findWithTrash($id, int $lockMode = LockMode::NONE, ?int $lockVersion = null) {
+
+        return $this->doFind($id, $lockMode, $lockVersion, true);
+    }
+
+    /**
+     * Finds all documents in the repository.
+     *
+     * @return array
+     */
+    public function findAll() : array {
+
         return $this->findBy([]);
+    }
+
+    /**
+     * Finds all documents in the repository.
+     *
+     * @return array
+     */
+    public function findAllWithTrashed() : array {
+
+        return $this->findByWithTrashed([]);
     }
 
     /**
      * Finds documents by a set of criteria.
      *
+     * @param array|null $sort
+     * @param array $criteria
      * @param int|null $limit
      * @param int|null $skip
+     *
+     * @return array
      */
-    public function findBy(array $criteria, ?array $sort = null, $limit = null, $skip = null) : array
-    {
+    public function findBy(array $criteria, ?array $sort = null, $limit = null, $skip = null) : array {
+
         return $this->getDocumentPersister()->loadAll($criteria, $sort, $limit, $skip)->toArray();
     }
 
     /**
-     * Finds a single document by a set of criteria.
+     * Finds documents by a set of criteria.
+     *
+     * @param array|null $sort
+     * @param array $criteria
+     * @param int|null $limit
+     * @param int|null $skip
+     *
+     * @return array
      */
-    public function findOneBy(array $criteria) : ?object
-    {
+    public function findByWithTrashed(array $criteria, ?array $sort = null, $limit = null, $skip = null) : array {
+
+        return $this->getDocumentPersister()->loadAll($criteria, $sort, $limit, $skip, true)->toArray();
+    }
+
+    /**
+     * Finds a single document by a set of criteria.
+     *
+     * @param array $criteria
+     *
+     * @return object
+     * @throws LockException
+     */
+    public function findOneBy(array $criteria) : ?object {
+
         return $this->getDocumentPersister()->load($criteria);
     }
 
-    public function getDocumentName() : string
-    {
+    /**
+     * Finds a single document by a set of criteria.
+     *
+     * @param array $criteria
+     *
+     * @return object
+     * @throws LockException
+     */
+    public function findOneByWithTrashed(array $criteria) : ?object {
+
+        return $this->getDocumentPersister()->load($criteria, null, [], 0, null, true);
+    }
+
+    public function getDocumentName() : string {
+
         return $this->documentName;
     }
 
-    public function getDocumentManager() : DocumentManager
-    {
+    public function getDocumentManager() : DocumentManager {
+
         return $this->dm;
     }
 
-    public function getClassMetadata() : ClassMetadata
-    {
+    public function getClassMetadata() : ClassMetadata {
+
         return $this->class;
     }
 
@@ -192,6 +278,12 @@ class DocumentRepository implements ObjectRepository, Selectable
      * Selects all elements from a selectable that match the expression and
      * returns a new collection containing these elements.
      *
+     * @param Criteria $criteria
+     *
+     * @return ArrayCollection
+     *
+     *
+     * @throws MongoDBException
      * @see Selectable::matching()
      */
     public function matching(Criteria $criteria) : ArrayCollection
@@ -223,8 +315,8 @@ class DocumentRepository implements ObjectRepository, Selectable
         return new ArrayCollection($iterator->toArray());
     }
 
-    protected function getDocumentPersister() : DocumentPersister
-    {
+    protected function getDocumentPersister() : DocumentPersister {
+
         return $this->uow->getDocumentPersister($this->documentName);
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MOTA9100\ODM\Persisters;
 
 use BadMethodCallException;
+use MongoDB\BSON\UTCDateTime;
 use MOTA9100\ODM\DocumentManager;
 use MOTA9100\ODM\Hydrator\HydratorException;
 use MOTA9100\ODM\Hydrator\HydratorFactory;
@@ -15,7 +16,7 @@ use MOTA9100\ODM\Iterator\PrimingIterator;
 use MOTA9100\ODM\LockException;
 use MOTA9100\ODM\LockMode;
 use MOTA9100\ODM\Mapping\ClassMetadata;
-use MOTA9100\ODMException;
+use MOTA9100\ODM\MongoDBException;
 use MOTA9100\ODM\PersistentCollection\PersistentCollectionException;
 use MOTA9100\ODM\PersistentCollection\PersistentCollectionInterface;
 use MOTA9100\ODM\Query\CriteriaMerger;
@@ -457,17 +458,32 @@ final class DocumentPersister
      * be used to match an _id value.
      *
      * @param mixed $criteria Query criteria
+     * @param object|null $document
+     * @param array $hints
+     * @param int $lockMode
+     * @param array|null $sort
+     * @param bool $withTrashed
      *
      * @throws LockException
      *
      * @todo Check identity map? loadById method? Try to guess whether
      *     $criteria is the id?
      */
-    public function load($criteria, ?object $document = null, array $hints = [], int $lockMode = 0, ?array $sort = null) : ?object
-    {
+    public function load($criteria,
+                         ?object $document = null,
+                         array $hints = [],
+                         int $lockMode = 0,
+                         ?array $sort = null,
+                         bool $withTrashed = false) : ?object {
+
         // TODO: remove this
         if ($criteria === null || is_scalar($criteria) || $criteria instanceof ObjectId) {
             $criteria = ['_id' => $criteria];
+        }
+
+        if(!$withTrashed) {
+
+            $criteria = $this->addSofDeleteToPreparedQuery($criteria);
         }
 
         $criteria = $this->prepareQueryOrNewObj($criteria);
@@ -498,9 +514,27 @@ final class DocumentPersister
 
     /**
      * Finds documents by a set of criteria.
+     *
+     * @param array $criteria
+     * @param array|null $sort
+     * @param int|null $limit
+     * @param int|null $skip
+     * @param bool $withTrashed
+     *
+     * @return CachingIterator
      */
-    public function loadAll(array $criteria = [], ?array $sort = null, ?int $limit = null, ?int $skip = null) : Iterator
-    {
+    public function loadAll(
+        array $criteria = [],
+        ?array $sort = null,
+        ?int $limit = null,
+        ?int $skip = null,
+        bool $withTrashed = false) : Iterator {
+
+        if(!$withTrashed) {
+
+            $criteria = $this->addSofDeleteToPreparedQuery($criteria);
+        }
+
         $criteria = $this->prepareQueryOrNewObj($criteria);
         $criteria = $this->addDiscriminatorToPreparedQuery($criteria);
         $criteria = $this->addFilterToPreparedQuery($criteria);
@@ -564,6 +598,10 @@ final class DocumentPersister
 
     /**
      * Wraps the supplied base cursor in the corresponding ODM class.
+     *
+     * @param Cursor $baseCursor
+     *
+     * @return CachingIterator
      */
     private function wrapCursor(Cursor $baseCursor) : Iterator
     {
@@ -959,6 +997,27 @@ final class DocumentPersister
             $preparedQuery[$this->class->discriminatorField] = $discriminatorValues[0];
         } else {
             $preparedQuery[$this->class->discriminatorField] = ['$in' => $discriminatorValues];
+        }
+
+        return $preparedQuery;
+    }
+
+    public function addSofDeleteToPreparedQuery(array $preparedQuery) {
+
+        if($this->class->softDeleteField) {
+
+            $preparedQuery['$or'] = [
+                [
+                    $this->class->softDeleteField => [
+                        '$exists' => false
+                    ]
+                ],
+                [
+                    $this->class->softDeleteField => [
+                        '$gt' => new UTCDateTime()
+                    ]
+                ]
+            ];
         }
 
         return $preparedQuery;

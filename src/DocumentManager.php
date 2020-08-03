@@ -166,8 +166,8 @@ class DocumentManager implements ObjectManager
      * @throws Hydrator\HydratorException
      * @throws MongoDBException
      */
-    protected function __construct(?Client $client = null, ?Configuration $config = null, ?EventManager $eventManager = null)
-    {
+    protected function __construct(?Client $client = null, ?Configuration $config = null, ?EventManager $eventManager = null) {
+
         $this->config       = $config ?: new Configuration();
         $this->eventManager = $eventManager ?: new EventManager();
         $this->client       = $client ?: new Client(
@@ -215,8 +215,8 @@ class DocumentManager implements ObjectManager
     /**
      * Gets the proxy factory used by the DocumentManager to create document proxies.
      */
-    public function getProxyFactory() : ProxyFactory
-    {
+    public function getProxyFactory() : ProxyFactory {
+
         return $this->proxyFactory;
     }
 
@@ -224,6 +224,8 @@ class DocumentManager implements ObjectManager
      * Creates a new Document that operates on the given Mongo connection
      * and uses the given Configuration.
      *
+     * @param array $appConfig
+     * @param array$connectionConfig
      * @param Client|null $client
      * @param Configuration|null $config
      * @param EventManager|null $eventManager
@@ -231,26 +233,27 @@ class DocumentManager implements ObjectManager
      * @throws Hydrator\HydratorException
      * @throws MongoDBException
      */
-    public static function create(?Client $client = null, ?Configuration $config = null, ?EventManager $eventManager = null) : DocumentManager {
+    public static function create(array $appConfig,
+                                  array $connectionConfig,
+                                  ?Client $client = null,
+                                  ?Configuration $config = null,
+                                  ?EventManager $eventManager = null) : DocumentManager {
 
-        $app_config = config('doctrine');
-        $connection_config = config('database.connections.mongodb', []);
-
-        $port = $connection_config['port'] ? ':' . $connection_config['port'] : '';
+        $port = $connectionConfig['port'] ? ':' . $connectionConfig['port'] : '';
 
         $client = new Client(
-            'mongodb://' . $connection_config['host'] . $port,
-            $connection_config['uri_options'],
-            $connection_config['driver_options']
+            'mongodb://' . $connectionConfig['host'] . $port,
+            $connectionConfig['uri_options'],
+            $connectionConfig['driver_options']
         );
 
         // Setup the Doctrine configuration object
         $config = new Configuration();
-        $config->setProxyDir($app_config['proxies']['path']);
-        $config->setProxyNamespace($app_config['proxies']['namespace']);
-        $config->setHydratorDir($app_config['hydrators']['path']);
-        $config->setHydratorNamespace($app_config['hydrators']['namespace']);
-        $config->setMetadataDriverImpl(AnnotationDriver::create($app_config['documents']['path']));
+        $config->setProxyDir($appConfig['proxies']['path']);
+        $config->setProxyNamespace($appConfig['proxies']['namespace']);
+        $config->setHydratorDir($appConfig['hydrators']['path']);
+        $config->setHydratorNamespace($appConfig['hydrators']['namespace']);
+        $config->setMetadataDriverImpl(AnnotationDriver::create($appConfig['documents']['path']));
         $config->setMetadataCacheImpl(new VoidCache());
 
         $eventManager = $eventManager ?? new EventManager();
@@ -261,16 +264,16 @@ class DocumentManager implements ObjectManager
     /**
      * Gets the EventManager used by the DocumentManager.
      */
-    public function getEventManager() : EventManager
-    {
+    public function getEventManager() : EventManager {
+
         return $this->eventManager;
     }
 
     /**
      * Gets the MongoDB client instance that this DocumentManager wraps.
      */
-    public function getClient() : Client
-    {
+    public function getClient() : Client {
+
         return $this->client;
     }
 
@@ -279,8 +282,8 @@ class DocumentManager implements ObjectManager
      *
      * @return ClassMetadataFactory
      */
-    public function getMetadataFactory()
-    {
+    public function getMetadataFactory() {
+
         return $this->metadataFactory;
     }
 
@@ -291,16 +294,16 @@ class DocumentManager implements ObjectManager
      *
      * @param object $obj
      */
-    public function initializeObject($obj)
-    {
+    public function initializeObject($obj) {
+
         $this->unitOfWork->initializeObject($obj);
     }
 
     /**
      * Gets the UnitOfWork used by the DocumentManager to coordinate operations.
      */
-    public function getUnitOfWork() : UnitOfWork
-    {
+    public function getUnitOfWork() : UnitOfWork {
+
         return $this->unitOfWork;
     }
 
@@ -308,22 +311,22 @@ class DocumentManager implements ObjectManager
      * Gets the Hydrator factory used by the DocumentManager to generate and get hydrators
      * for each type of document.
      */
-    public function getHydratorFactory() : HydratorFactory
-    {
+    public function getHydratorFactory() : HydratorFactory {
+
         return $this->hydratorFactory;
     }
 
     /**
      * Returns SchemaManager, used to create/drop indexes/collections/databases.
      */
-    public function getSchemaManager() : SchemaManager
-    {
+    public function getSchemaManager() : SchemaManager {
+
         return $this->schemaManager;
     }
 
     /** Returns the class name resolver which is used to resolve real class names for proxy objects. */
-    public function getClassNameResolver() : ClassNameResolver
-    {
+    public function getClassNameResolver() : ClassNameResolver {
+
         return $this->classNameResolver;
     }
 
@@ -507,6 +510,25 @@ class DocumentManager implements ObjectManager
         }
         $this->errorIfClosed();
         $this->unitOfWork->remove($document);
+    }
+
+    /**
+     * restore a document instance.
+     *
+     * A removed document will be removed from the database at or before transaction commit
+     * or as a result of the flush operation.
+     *
+     * @param object $document The document instance to remove.
+     *
+     * @throws InvalidArgumentException When the $document param is not an object.
+     */
+    public function restore($document)
+    {
+        if (! is_object($document)) {
+            throw new InvalidArgumentException(gettype($document));
+        }
+        $this->errorIfClosed();
+        $this->unitOfWork->restore($document);
     }
 
     /**

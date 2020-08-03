@@ -514,6 +514,11 @@ use function trigger_error;
      */
     public $isReadOnly;
 
+    /**
+     * @var string
+     */
+    public $softDeleteField;
+
     /** @var InstantiatorInterface */
     private $instantiator;
 
@@ -522,6 +527,8 @@ use function trigger_error;
 
     /** @var string|null */
     private $rootClass;
+
+
 
     /**
      * Initializes a new ClassMetadata instance that will hold the object-document mapping
@@ -1747,6 +1754,11 @@ use function trigger_error;
     public function markReadOnly() : void
     {
         $this->isReadOnly = true;
+    }
+
+    public function setSoftDeleteField($softDeleteField) {
+
+        $this->softDeleteField = $softDeleteField;
     }
 
     public function getRootClass() : ?string

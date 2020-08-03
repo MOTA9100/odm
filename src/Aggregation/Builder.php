@@ -575,6 +575,7 @@ class Builder
         $documentPersister = $this->dm->getUnitOfWork()->getDocumentPersister($this->class->name);
 
         $query = $documentPersister->addDiscriminatorToPreparedQuery($query);
+        $query = $documentPersister->addSofDeleteToPreparedQuery($query);
         $query = $documentPersister->addFilterToPreparedQuery($query);
 
         return $query;

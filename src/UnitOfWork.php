@@ -1654,10 +1654,49 @@ final class UnitOfWork implements PropertyChangedListener
     /**
      * Deletes a document as part of the current unit of work.
      *
+     * @param object $document
+     *
      * @internal
      */
-    public function remove(object $document)
-    {
+    public function remove(object $document) {
+
+        $class = $this->dm->getClassMetadata(get_class($document));
+
+        if ($class->softDeleteField) {
+            $setter = 'set' . str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $class->softDeleteField)));
+            $document->$setter(new \DateTime());
+            $this->persist($document);
+        } else {
+            $visited = [];
+            $this->doRemove($document, $visited);
+        }
+    }
+
+    /**
+     * Restore a document as part of the current unit of work.
+     *
+     * @param object $document
+     *
+     * @internal
+     */
+    public function restore(object $document) {
+
+        $class = $this->dm->getClassMetadata(get_class($document));
+
+        if ($class->softDeleteField) {
+            $setter = 'unset' . str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $class->softDeleteField)));
+            $document->$setter(new \DateTime());
+            $this->persist($document);
+        }
+    }
+
+    /**
+     * Deletes a document as part of the current unit of work.
+     *
+     * @internal
+     */
+    public function forceRemove(object $document) {
+
         $visited = [];
         $this->doRemove($document, $visited);
     }

@@ -12,7 +12,7 @@ use MOTA9100\ODM\Iterator\Iterator;
 use MOTA9100\ODM\Iterator\PrimingIterator;
 use MOTA9100\ODM\Iterator\UnrewindableIterator;
 use MOTA9100\ODM\Mapping\ClassMetadata;
-use MOTA9100\ODMException;
+use MOTA9100\ODM\MongoDBException;
 use InvalidArgumentException;
 use IteratorAggregate;
 use MongoDB\Collection;
@@ -41,16 +41,20 @@ use function reset;
  * ODM Query wraps the raw Doctrine MongoDB queries to add additional functionality
  * and to hydrate the raw arrays of data to Doctrine document objects.
  */
-final class Query implements IteratorAggregate
-{
-    public const TYPE_FIND            = 1;
-    public const TYPE_FIND_AND_UPDATE = 2;
-    public const TYPE_FIND_AND_REMOVE = 3;
-    public const TYPE_INSERT          = 4;
-    public const TYPE_UPDATE          = 5;
-    public const TYPE_REMOVE          = 6;
-    public const TYPE_DISTINCT        = 9;
-    public const TYPE_COUNT           = 11;
+final class Query implements IteratorAggregate {
+
+    public const TYPE_FIND                              = 1;
+    public const TYPE_FIND_AND_UPDATE                   = 2;
+    public const TYPE_FIND_AND_REMOVE_TEMPORARY         = 3;
+    public const TYPE_INSERT                            = 4;
+    public const TYPE_UPDATE                            = 5;
+    public const TYPE_REMOVE_TEMPORARY                  = 6;
+    public const TYPE_DISTINCT                          = 9;
+    public const TYPE_COUNT                             = 11;
+    public const TYPE_FIND_AND_REMOVE_PERMANENTLY       = 13;
+    public const TYPE_REMOVE_PERMANENTLY                = 12;
+    public const TYPE_FIND_AND_RESTORE                  = 13;
+    public const TYPE_RESTORE                           = 14;
 
     public const HINT_REFRESH = 1;
     // 2 was used for HINT_SLAVE_OKAY, which was removed in 2.0
@@ -126,12 +130,16 @@ final class Query implements IteratorAggregate
         switch ($query['type']) {
             case self::TYPE_FIND:
             case self::TYPE_FIND_AND_UPDATE:
-            case self::TYPE_FIND_AND_REMOVE:
+            case self::TYPE_FIND_AND_REMOVE_TEMPORARY:
             case self::TYPE_INSERT:
             case self::TYPE_UPDATE:
-            case self::TYPE_REMOVE:
+            case self::TYPE_REMOVE_TEMPORARY:
             case self::TYPE_DISTINCT:
             case self::TYPE_COUNT:
+            case self::TYPE_FIND_AND_REMOVE_PERMANENTLY:
+            case self::TYPE_REMOVE_PERMANENTLY:
+            case self::TYPE_FIND_AND_RESTORE:
+            case self::TYPE_RESTORE:
                 break;
 
             default:
@@ -195,7 +203,9 @@ final class Query implements IteratorAggregate
          * includes the identifier field, attempt hydration.
          */
         if (($this->query['type'] === self::TYPE_FIND_AND_UPDATE ||
-                $this->query['type'] === self::TYPE_FIND_AND_REMOVE) &&
+                $this->query['type'] === self::TYPE_FIND_AND_REMOVE_TEMPORARY ||
+                $this->query['type'] === self::TYPE_FIND_AND_REMOVE_PERMANENTLY ||
+                $this->query['type'] === self::TYPE_FIND_AND_RESTORE) &&
             is_array($results) && isset($results['_id'])) {
             $results = $uow->getOrCreateDocument($this->class->name, $results, $this->unitOfWorkHints);
 
@@ -414,8 +424,8 @@ final class Query implements IteratorAggregate
      *
      * @return Iterator|UpdateResult|InsertOneResult|DeleteResult|array|object|int|null
      */
-    private function runQuery()
-    {
+    private function runQuery() {
+
         $options = $this->options;
 
         switch ($this->query['type']) {
@@ -430,6 +440,8 @@ final class Query implements IteratorAggregate
 
                 return $this->makeIterator($cursor);
             case self::TYPE_FIND_AND_UPDATE:
+            case self::TYPE_FIND_AND_REMOVE_TEMPORARY:
+            case self::TYPE_FIND_AND_RESTORE:
                 $queryOptions                   = $this->getQueryOptions('select', 'sort', 'upsert');
                 $queryOptions                   = $this->renameQueryOptions($queryOptions, ['select' => 'projection']);
                 $queryOptions['returnDocument'] = $this->query['new'] ?? false ? FindOneAndUpdate::RETURN_DOCUMENT_AFTER : FindOneAndUpdate::RETURN_DOCUMENT_BEFORE;
@@ -441,7 +453,8 @@ final class Query implements IteratorAggregate
                     $this->query['newObj'],
                     array_merge($options, $queryOptions)
                 );
-            case self::TYPE_FIND_AND_REMOVE:
+
+            case self::TYPE_FIND_AND_REMOVE_PERMANENTLY:
                 $queryOptions = $this->getQueryOptions('select', 'sort');
                 $queryOptions = $this->renameQueryOptions($queryOptions, ['select' => 'projection']);
 
@@ -452,6 +465,8 @@ final class Query implements IteratorAggregate
             case self::TYPE_INSERT:
                 return $this->collection->insertOne($this->query['newObj'], $options);
             case self::TYPE_UPDATE:
+            case self::TYPE_REMOVE_TEMPORARY:
+            case self::TYPE_RESTORE:
                 $multiple = $this->query['multiple'] ?? false;
 
                 if ($this->isFirstKeyUpdateOperator()) {
@@ -477,7 +492,7 @@ final class Query implements IteratorAggregate
                     $this->query['newObj'],
                     array_merge($options, $this->getQueryOptions('upsert'))
                 );
-            case self::TYPE_REMOVE:
+            case self::TYPE_REMOVE_PERMANENTLY:
                 return $this->collection->deleteMany($this->query['query'], $options);
             case self::TYPE_DISTINCT:
                 $collection = $this->collection;

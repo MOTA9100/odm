@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MOTA9100\ODM\Query;
 
 use BadMethodCallException;
+use MongoDB\BSON\UTCDateTime;
 use MOTA9100\ODM\DocumentManager;
 use MOTA9100\ODM\Mapping\ClassMetadata;
 use GeoJson\Geometry\Geometry;
@@ -65,6 +66,11 @@ class Builder
      * @var bool
      */
     private $refresh = false;
+
+    /**
+     * @var bool $withTrashed
+     */
+    private $withTrashed = false;
 
     /**
      * Array of primer Closure instances.
@@ -365,6 +371,13 @@ class Builder
         return $this;
     }
 
+    public function withTrashed() : self {
+
+        $this->withTrashed = true;
+
+        return $this;
+    }
+
     /**
      * Sets the value of the current field to the current date, either as a date or a timestamp.
      *
@@ -523,10 +536,39 @@ class Builder
         return $this;
     }
 
-    public function findAndRemove(?string $documentName = null) : self
-    {
+    public function findAndRemove(?string $documentName = null) : self {
+
         $this->setDocumentName($documentName);
-        $this->query['type'] = Query::TYPE_FIND_AND_REMOVE;
+
+        if($this->class->softDeleteField) {
+
+            $this->query['type']     = Query::TYPE_FIND_AND_REMOVE_TEMPORARY;
+            $this->field($this->class->softDeleteField)->set(new UTCDateTime());
+        } else {
+
+            $this->query['type'] = Query::TYPE_FIND_AND_REMOVE_PERMANENTLY;
+            $this->withTrashed();
+        }
+
+        return $this;
+    }
+
+    public function findAndRemoveForce(?string $documentName = null) : self {
+
+        $this->setDocumentName($documentName);
+        $this->query['type'] = Query::TYPE_FIND_AND_REMOVE_PERMANENTLY;
+        $this->withTrashed();
+
+        return $this;
+    }
+
+    public function findAndRestore(?string $documentName = null) : self {
+
+        $this->setDocumentName($documentName);
+        $this->query['type'] = Query::TYPE_FIND_AND_RESTORE;
+        $this->withTrashed();
+
+        $this->field($this->class->softDeleteField)->unsetField();
 
         return $this;
     }
@@ -663,15 +705,24 @@ class Builder
 
     /**
      * Gets the Query executable.
+     *
+     * @var array $options
+     * @return Query
      */
-    public function getQuery(array $options = []) : Query
-    {
+    public function getQuery(array $options = []) : Query {
+
         $documentPersister = $this->dm->getUnitOfWork()->getDocumentPersister($this->class->name);
 
         $query = $this->query;
 
         $query['query'] = $this->expr->getQuery();
         $query['query'] = $documentPersister->addDiscriminatorToPreparedQuery($query['query']);
+
+        if(!$this->withTrashed) {
+
+            $query['query'] = $documentPersister->addSofDeleteToPreparedQuery($query['query']);
+        }
+
         $query['query'] = $documentPersister->addFilterToPreparedQuery($query['query']);
 
         $query['newObj'] = $this->expr->getNewObj();
@@ -1218,10 +1269,42 @@ class Builder
         return $this;
     }
 
-    public function remove(?string $documentName = null) : self
-    {
+    public function remove(?string $documentName = null) : self {
+
         $this->setDocumentName($documentName);
-        $this->query['type'] = Query::TYPE_REMOVE;
+
+        if($this->class->softDeleteField) {
+
+            $this->query['type']     = Query::TYPE_REMOVE_TEMPORARY;
+            $this->query['multiple'] = true;
+
+            $this->field($this->class->softDeleteField)->set(new UTCDateTime());
+        } else {
+
+            $this->query['type'] = Query::TYPE_REMOVE_PERMANENTLY;
+            $this->withTrashed();
+        }
+
+        return $this;
+    }
+
+    public function forceRemove(?string $documentName = null) : self {
+
+        $this->setDocumentName($documentName);
+        $this->query['type'] = Query::TYPE_REMOVE_PERMANENTLY;
+        $this->withTrashed();
+
+        return $this;
+    }
+
+    public function restore(?string $documentName = null) : self {
+
+        $this->setDocumentName($documentName);
+        $this->query['type']     = Query::TYPE_RESTORE;
+        $this->query['multiple'] = true;
+        $this->withTrashed();
+
+        $this->field($this->class->softDeleteField)->unsetField();
 
         return $this;
     }

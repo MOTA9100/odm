@@ -163,6 +163,7 @@ final class ClassMetadataFactory extends AbstractClassMetadataFactory
             $class->setChangeTrackingPolicy($parent->changeTrackingPolicy);
             $class->setReadPreference($parent->readPreference, $parent->readPreferenceTags);
             $class->setWriteConcern($parent->writeConcern);
+            $class->setSoftDeleteField($parent->softDeleteField);
 
             if ($parent->isMappedSuperclass) {
                 $class->setCustomRepositoryClass($parent->customRepositoryClassName);
