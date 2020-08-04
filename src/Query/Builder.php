@@ -1183,8 +1183,8 @@ class Builder
      *
      * @param mixed|Expr $valueOrExpression
      */
-    public function pull($valueOrExpression) : self
-    {
+    public function pull($valueOrExpression) : self {
+
         $this->expr->pull($valueOrExpression);
 
         return $this;
@@ -1288,13 +1288,55 @@ class Builder
         return $this;
     }
 
-    public function forceRemove(?string $documentName = null) : self {
+    public function removeForce(?string $documentName = null) : self {
 
         $this->setDocumentName($documentName);
         $this->query['type'] = Query::TYPE_REMOVE_PERMANENTLY;
         $this->withTrashed();
 
         return $this;
+    }
+
+    public function removeEmbed(string $embed, Expr $expr, ?string $documentName = null) {
+
+        $this->setDocumentName($documentName);
+
+        $embeds = explode('.', $embed);
+        $class = $this->class;
+
+        foreach ($embeds as $em) {
+
+            $class = $this->dm->getClassMetadata($class->associationMappings[$em]['targetDocument']);
+        }
+
+        if($class->softDeleteField) {
+
+            $this->query['type']     = Query::TYPE_UPDATE;
+            $this->query['multiple'] = true;
+
+            $this->addQueryArray($expr->getQuery());
+            $this->field((implode('.', $embeds) . '.$.'. $class->softDeleteField))->set(new UTCDateTime());
+
+        } else {
+            $this->pull($expr);
+        }
+
+        return $this;
+    }
+
+    public function removeEmbedForce(string $embed, Expr $criteria, ?string $documentName = null) {
+
+        $this->setDocumentName($documentName);
+
+        $embeds = explode('.', $embed);
+        $class = $this->class;
+
+        foreach ($embeds as $em) {
+
+            $class = $this->dm->getClassMetadata($class->associationMappings[$em]['targetDocument']);
+        }
+
+        ddd($class);
     }
 
     public function restore(?string $documentName = null) : self {
@@ -1481,6 +1523,18 @@ class Builder
     public function setQueryArray(array $query) : self
     {
         $this->expr->setQuery($query);
+
+        return $this;
+    }
+
+    /**
+     * Set the expression's query criteria.
+     *
+     * @see Expr::setQuery()
+     */
+    public function addQueryArray(array $query) : self
+    {
+        $this->expr->addQuery($query);
 
         return $this;
     }

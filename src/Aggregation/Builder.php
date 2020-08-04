@@ -10,6 +10,7 @@ use MOTA9100\ODM\Iterator\HydratingIterator;
 use MOTA9100\ODM\Iterator\Iterator;
 use MOTA9100\ODM\Iterator\UnrewindableIterator;
 use MOTA9100\ODM\Mapping\ClassMetadata;
+use MOTA9100\ODM\MongoDBException;
 use MOTA9100\ODM\Persisters\DocumentPersister;
 use MOTA9100\ODM\Query\Expr as QueryExpr;
 use GeoJson\Geometry\Point;
@@ -63,14 +64,30 @@ class Builder
     /** @var bool */
     private $rewindable = true;
 
+    /** @var bool */
+    private $withTrash = false;
+
     /**
+     *
      * Create a new aggregation builder.
+     *
+     * @param DocumentManager $dm
+     * @param string $documentName
+     *
+     * @throws MongoDBException
      */
     public function __construct(DocumentManager $dm, string $documentName)
     {
         $this->dm         = $dm;
         $this->class      = $this->dm->getClassMetadata($documentName);
         $this->collection = $this->dm->getDocumentCollection($documentName);
+    }
+
+    public function withTrash() {
+
+        $this->withTrash = true;
+
+        return$this;
     }
 
     /**
@@ -574,8 +591,12 @@ class Builder
     {
         $documentPersister = $this->dm->getUnitOfWork()->getDocumentPersister($this->class->name);
 
+        if(!$this->withTrash) {
+
+            $query = $documentPersister->addSofDeleteToPreparedQuery($query);
+        }
+
         $query = $documentPersister->addDiscriminatorToPreparedQuery($query);
-        $query = $documentPersister->addSofDeleteToPreparedQuery($query);
         $query = $documentPersister->addFilterToPreparedQuery($query);
 
         return $query;

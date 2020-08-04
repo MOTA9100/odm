@@ -1202,6 +1202,21 @@ class Expr
     }
 
     /**
+     * Set the query criteria.
+     *
+     * @param array $query
+     *
+     * @return self
+     * @see Builder::setQueryArray()
+     */
+    public function addQuery(array $query) : self
+    {
+        $this->query = array_merge($this->query, $query);
+
+        return $this;
+    }
+
+    /**
      * Specify $size criteria for the current field.
      *
      * @see Builder::size()

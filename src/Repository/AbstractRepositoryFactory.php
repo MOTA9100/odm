@@ -7,7 +7,7 @@ namespace MOTA9100\ODM\Repository;
 use MOTA9100\ODM\DocumentManager;
 use MOTA9100\ODM\Mapping\ClassMetadata;
 use MOTA9100\ODM\Mapping\MappingException;
-use MOTA9100\ODMException;
+use MOTA9100\ODM\MongoDBException;
 use Doctrine\Persistence\ObjectRepository;
 use function is_a;
 use function ltrim;
