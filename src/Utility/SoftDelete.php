@@ -32,6 +32,9 @@ trait SoftDelete {
         $this->deleted_at = new UTCDateTime($deleted_at->getTimestamp() * 1000);
     }
 
+    /**
+     *
+     */
     public function unsetDeletedAt() : void {
 
         $this->deleted_at = null;

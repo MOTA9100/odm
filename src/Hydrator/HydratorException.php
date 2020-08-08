@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace MOTA9100\ODM\Hydrator;
 
-use MOTA9100\ODMException;
+use MOTA9100\ODM\MongoDBException;
 use function sprintf;
 
 /**

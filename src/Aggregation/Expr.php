@@ -484,10 +484,14 @@ class Expr
 
     /**
      * Set the current field for building the expression.
+     *
+     * @param string $fieldName
+     * @param bool $useOriginal
+     * @return $this
      */
-    public function field(string $fieldName) : self
-    {
-        $fieldName          = $this->getDocumentPersister()->prepareFieldName($fieldName);
+    public function field(string $fieldName, bool $useOriginal = false) : self {
+
+        $fieldName          = $this->getDocumentPersister()->prepareFieldName($fieldName, $useOriginal);
         $this->currentField = $fieldName;
 
         return $this;
@@ -1436,6 +1440,11 @@ class Expr
     public function sum($expression) : self
     {
         return $this->operator('$sum', $expression);
+    }
+
+    public function toString($expression) {
+
+        return $this->operator('$toString', $expression);
     }
 
     /**

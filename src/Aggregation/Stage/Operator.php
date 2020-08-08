@@ -408,11 +408,15 @@ abstract class Operator extends Stage
     /**
      * Set the current field for building the expression.
      *
+     * @param string $fieldName
+     * @param bool $useOriginal
+     * @return $this
+     *
      * @see Expr::field
      */
-    public function field(string $fieldName)
-    {
-        $this->expr->field($fieldName);
+    public function field(string $fieldName, bool $useOriginal = false) {
+
+        $this->expr->field($fieldName, $useOriginal);
 
         return $this;
     }
@@ -1352,6 +1356,13 @@ abstract class Operator extends Stage
     public function subtract($expression1, $expression2) : self
     {
         $this->expr->subtract($expression1, $expression2);
+
+        return $this;
+    }
+
+    public function toString($expression) {
+
+        $this->expr->toString($expression);
 
         return $this;
     }

@@ -343,4 +343,9 @@ abstract class Stage
     {
         return $this->builder->addStage($stage);
     }
+
+    public function addSoftDeleteFilter() {
+
+        return $this->builder->addSoftDeleteFilter();
+    }
 }

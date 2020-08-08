@@ -961,10 +961,14 @@ final class DocumentPersister
     /**
      * Prepare a mongodb field name and convert the PHP property names to
      * MongoDB field names.
+     *
+     * @param string $fieldName
+     * @param bool $useOriginal
+     * @return string
      */
-    public function prepareFieldName(string $fieldName) : string
+    public function prepareFieldName(string $fieldName, bool $useOriginal = false) : string
     {
-        $fieldNames = $this->prepareQueryElement($fieldName, null, null, false);
+        $fieldNames = $this->prepareQueryElement($fieldName, null, null, false, false, $useOriginal);
 
         return $fieldNames[0][0];
     }
@@ -1133,10 +1137,22 @@ final class DocumentPersister
      * It also handles converting $fieldName to the database name if they are
      * different.
      *
+     * @param string $fieldName
      * @param mixed $value
+     * @param ClassMetadata|null $class
+     * @param bool $prepareValue
+     * @param bool $inNewObj
+     * @param bool $useOriginal
+     * @return array
+     * @throws \MOTA9100\ODM\Mapping\MappingException
      */
-    private function prepareQueryElement(string $fieldName, $value = null, ?ClassMetadata $class = null, bool $prepareValue = true, bool $inNewObj = false) : array
-    {
+    private function prepareQueryElement(string $fieldName,
+                                         $value = null,
+                                         ?ClassMetadata $class = null,
+                                         bool $prepareValue = true,
+                                         bool $inNewObj = false,
+                                         bool $useOriginal = false) : array {
+
         $class = $class ?? $this->class;
 
         // @todo Consider inlining calls to ClassMetadata methods
@@ -1186,7 +1202,7 @@ final class DocumentPersister
 
         // Process identifier fields
         if (($class->hasField($fieldName) && $class->isIdentifier($fieldName)) || $fieldName === '_id') {
-            $fieldName = '_id';
+            $fieldName = $useOriginal ? $fieldName : '_id';
 
             if (! $prepareValue) {
                 return [[$fieldName, $value]];

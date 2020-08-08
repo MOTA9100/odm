@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MOTA9100\ODM\Aggregation;
 
+use MongoDB\BSON\UTCDateTime;
 use MOTA9100\ODM\DocumentManager;
 use MOTA9100\ODM\Iterator\CachingIterator;
 use MOTA9100\ODM\Iterator\HydratingIterator;
@@ -65,7 +66,7 @@ class Builder
     private $rewindable = true;
 
     /** @var bool */
-    private $withTrash = false;
+    private $withTrashed = false;
 
     /**
      *
@@ -83,9 +84,9 @@ class Builder
         $this->collection = $this->dm->getDocumentCollection($documentName);
     }
 
-    public function withTrash() {
+    public function withTrashed() {
 
-        $this->withTrash = true;
+        $this->withTrashed = true;
 
         return$this;
     }
@@ -584,14 +585,28 @@ class Builder
         return $stage;
     }
 
+    public function addSoftDeleteFilter() {
+
+        if($this->class->softDeleteField) {
+
+            $this->match()
+                ->field($this->class->softDeleteField)->exists(false)
+                ->addOr(
+                    (new QueryExpr($this->dm))->field($this->class->softDeleteField)->gt(new UTCDateTime())
+                );
+        }
+
+        return $this;
+    }
+
     /**
      * Applies filters and discriminator queries to the pipeline
      */
-    private function applyFilters(array $query) : array
-    {
+    private function applyFilters(array $query) : array {
+
         $documentPersister = $this->dm->getUnitOfWork()->getDocumentPersister($this->class->name);
 
-        if(!$this->withTrash) {
+        if(!$this->withTrashed) {
 
             $query = $documentPersister->addSofDeleteToPreparedQuery($query);
         }
