@@ -15,6 +15,7 @@ use MongoDB\BSON\Binary;
 use MongoDB\BSON\Javascript;
 use MongoDB\Collection;
 use MongoDB\Driver\ReadPreference;
+use stdClass;
 use function array_filter;
 use function array_key_exists;
 use function count;
@@ -1297,46 +1298,44 @@ class Builder
         return $this;
     }
 
-    public function removeEmbed(string $embed, Expr $expr, ?string $documentName = null) {
+    public function removeEmbed(string $notations, string $identifier, ?string $documentName = null) {
 
         $this->setDocumentName($documentName);
+        $this->query['type']     = Query::TYPE_UPDATE;
+        $this->query['multiple'] = true;
+        $details = $this->getEmbedDetails($notations);
 
-        $embeds = explode('.', $embed);
-        $class = $this->class;
+        if($details->class->softDeleteField) {
 
-        foreach ($embeds as $em) {
-
-            $class = $this->dm->getClassMetadata($class->associationMappings[$em]['targetDocument']);
-        }
-
-        if($class->softDeleteField) {
-
-            $this->query['type']     = Query::TYPE_UPDATE;
-            $this->query['multiple'] = true;
-
-            $this->addQueryArray($expr->getQuery());
-            $this->field((implode('.', $embeds) . '.$.'. $class->softDeleteField))->set(new UTCDateTime());
+            $this->arrayFilters('elem._id', $this->expr()->operator('$eq',new \MongoDB\BSON\ObjectId($identifier)))
+                ->field($details->field)->set(new UTCDateTime());
 
         } else {
-            $this->pull($expr);
+
+            $this->field($notations . '.id')->equals($identifier)
+                ->field($details->field)
+                ->pull([
+                    '_id' => new \MongoDB\BSON\ObjectId($identifier)
+                ]);
         }
 
         return $this;
     }
 
-    public function removeEmbedForce(string $embed, Expr $criteria, ?string $documentName = null) {
+    public function removeEmbedForce(string $notations, string $identifier, ?string $documentName = null) {
 
         $this->setDocumentName($documentName);
+        $this->query['type']     = Query::TYPE_UPDATE;
+        $this->query['multiple'] = true;
+        $details = $this->getEmbedDetails($notations, true);
 
-        $embeds = explode('.', $embed);
-        $class = $this->class;
+        $this->field($notations . '.id')->equals($identifier)
+            ->field($details->field)
+            ->pull([
+                '_id' => new \MongoDB\BSON\ObjectId($identifier)
+            ]);
 
-        foreach ($embeds as $em) {
-
-            $class = $this->dm->getClassMetadata($class->associationMappings[$em]['targetDocument']);
-        }
-
-        ddd($class);
+        return $this;
     }
 
     public function restore(?string $documentName = null) : self {
@@ -1349,6 +1348,65 @@ class Builder
         $this->field($this->class->softDeleteField)->unsetField();
 
         return $this;
+    }
+
+    public function restoreEmbed(string $notations, string $identifier, ?string $documentName = null) {
+
+        $this->setDocumentName($documentName);
+        $this->query['type']     = Query::TYPE_UPDATE;
+        $this->query['multiple'] = true;
+        $details = $this->getEmbedDetails($notations);
+
+        if($details->class->softDeleteField) {
+
+            $this->arrayFilters('elem._id', $this->expr()->operator('$eq',new \MongoDB\BSON\ObjectId($identifier)))
+                ->field($details->field)->unsetField();
+
+        }
+
+        return $this;
+    }
+
+    private function getEmbedDetails(string $notations, bool $force = false) {
+
+        $notationsAsArray = explode('.', $notations);
+        $notationsCount = count($notationsAsArray);
+        $field = '';
+        $class = $this->class;
+
+        foreach ($notationsAsArray as $notation) {
+
+            $class = $this->dm->getClassMetadata($class->associationMappings[$notation]['targetDocument']);
+        }
+
+        if($force) {
+
+            $class->setSoftDeleteField(null);
+        }
+
+        for($notationIndex = 0; $notationIndex < $notationsCount; $notationIndex++) {
+
+            $field .= $notationsAsArray[$notationIndex];
+
+            if (is_null($class->softDeleteField) && $notationsCount === ($notationIndex + 2)) {
+
+                $field .= '.$.';
+
+            } elseif (!is_null($class->softDeleteField) && $notationsCount === ($notationIndex + 1)) {
+
+                $field .= '.$[elem].' . $class->softDeleteField;
+
+            } elseif ($notationIndex < ($notationsCount - 1)) {
+
+                $field .= '.$[].';
+            }
+        }
+
+        $return = new StdClass();
+        $return->field = $field;
+        $return->class = $class;
+
+        return $return;
     }
 
     /**
@@ -1698,6 +1756,17 @@ class Builder
     public function upsert(bool $bool = true) : self
     {
         $this->query['upsert'] = $bool;
+
+        return $this;
+    }
+
+    public function arrayFilters($identifier, $expression) : self {
+
+        $this->query['arrayFilters'] = isset($this->query['arrayFilters']) ? $this->query['arrayFilters'] : [];
+
+        $this->query['arrayFilters'][] = [
+            $identifier => $expression instanceof Expr ? $expression->getQuery() : $expression
+        ];
 
         return $this;
     }

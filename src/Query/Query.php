@@ -483,14 +483,14 @@ final class Query implements IteratorAggregate {
                     return $this->collection->updateMany(
                         $this->query['query'],
                         $this->query['newObj'],
-                        array_merge($options, $this->getQueryOptions('upsert'))
+                        array_merge($options, $this->getQueryOptions('upsert', 'arrayFilters'))
                     );
                 }
 
                 return $this->collection->{$operation}(
                     $this->query['query'],
                     $this->query['newObj'],
-                    array_merge($options, $this->getQueryOptions('upsert'))
+                    array_merge($options, $this->getQueryOptions('upsert', 'arrayFilters'))
                 );
             case self::TYPE_REMOVE_PERMANENTLY:
                 return $this->collection->deleteMany($this->query['query'], $options);
