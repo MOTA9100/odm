@@ -42,9 +42,11 @@ class Project extends Operator
 
     /**
      * Shorthand method to define which fields to be included.
+     * @param array $fields
+     * @return Project
      */
-    public function includeFields(array $fields) : self
-    {
+    public function includeFields(array $fields) : self {
+
         foreach ($fields as $fieldName) {
             $this->field($fieldName)->expression(true);
         }
@@ -57,9 +59,11 @@ class Project extends Operator
      *
      * If you specify the exclusion of a field other than _id, you cannot employ
      * any other $project specification forms.
+     * @param array $fields
+     * @return Project
      */
-    public function excludeFields(array $fields) : self
-    {
+    public function excludeFields(array $fields) : self {
+
         foreach ($fields as $fieldName) {
             $this->field($fieldName)->expression(false);
         }

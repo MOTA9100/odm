@@ -91,11 +91,14 @@ class Group extends Operator
     /**
      * Set the current field for building the expression.
      *
+     * @param string $fieldName
+     * @param bool $useOriginal
+     * @return Group
      * @see Expr::field
      */
-    public function field(string $fieldName)
+    public function field(string $fieldName, bool $useOriginal = false)
     {
-        $this->expr->field($fieldName);
+        $this->expr->field($fieldName, $useOriginal);
 
         return $this;
     }

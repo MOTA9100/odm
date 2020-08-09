@@ -160,27 +160,31 @@ class DocumentManager implements ObjectManager
      * and uses the given Configuration.
      *
      * DocumentManager constructor.
-     * @param Client|null $client
-     * @param Configuration|null $config
-     * @param EventManager|null $eventManager
+     * @param array $appConfig
+     * @param array $connectionConfig
      * @throws Hydrator\HydratorException
      * @throws MongoDBException
      */
-    protected function __construct(?Client $client = null, ?Configuration $config = null, ?EventManager $eventManager = null) {
+    public function __construct(array $appConfig, array $connectionConfig) {
 
-        $this->config       = $config ?: new Configuration();
-        $this->eventManager = $eventManager ?: new EventManager();
-        $this->client       = $client ?: new Client(
-            'mongodb://127.0.0.1',
-            [],
-            [
-                'typeMap' => self::CLIENT_TYPEMAP,
-                'driver' => [
-                    'name' => 'doctrine-odm',
-                    'version' => self::getVersion(),
-                ],
-            ]
+        $port = $connectionConfig['port'] ? ':' . $connectionConfig['port'] : '';
+
+        $this->client = new Client(
+            'mongodb://' . $connectionConfig['host'] . $port,
+            $connectionConfig['uri_options'],
+            $connectionConfig['driver_options']
         );
+
+        // Setup the Doctrine configuration object
+        $this->config = new Configuration();
+        $this->config->setProxyDir($appConfig['proxies']['path']);
+        $this->config->setProxyNamespace($appConfig['proxies']['namespace']);
+        $this->config->setHydratorDir($appConfig['hydrators']['path']);
+        $this->config->setHydratorNamespace($appConfig['hydrators']['namespace']);
+        $this->config->setMetadataDriverImpl(AnnotationDriver::create($appConfig['documents']['path']));
+        $this->config->setMetadataCacheImpl(new VoidCache());
+
+        $this->eventManager = $eventManager ?? new EventManager();
 
         $this->checkTypeMap();
 
@@ -218,47 +222,6 @@ class DocumentManager implements ObjectManager
     public function getProxyFactory() : ProxyFactory {
 
         return $this->proxyFactory;
-    }
-
-    /**
-     * Creates a new Document that operates on the given Mongo connection
-     * and uses the given Configuration.
-     *
-     * @param array $appConfig
-     * @param array$connectionConfig
-     * @param Client|null $client
-     * @param Configuration|null $config
-     * @param EventManager|null $eventManager
-     * @return DocumentManager
-     * @throws Hydrator\HydratorException
-     * @throws MongoDBException
-     */
-    public static function create(array $appConfig,
-                                  array $connectionConfig,
-                                  ?Client $client = null,
-                                  ?Configuration $config = null,
-                                  ?EventManager $eventManager = null) : DocumentManager {
-
-        $port = $connectionConfig['port'] ? ':' . $connectionConfig['port'] : '';
-
-        $client = new Client(
-            'mongodb://' . $connectionConfig['host'] . $port,
-            $connectionConfig['uri_options'],
-            $connectionConfig['driver_options']
-        );
-
-        // Setup the Doctrine configuration object
-        $config = new Configuration();
-        $config->setProxyDir($appConfig['proxies']['path']);
-        $config->setProxyNamespace($appConfig['proxies']['namespace']);
-        $config->setHydratorDir($appConfig['hydrators']['path']);
-        $config->setHydratorNamespace($appConfig['hydrators']['namespace']);
-        $config->setMetadataDriverImpl(AnnotationDriver::create($appConfig['documents']['path']));
-        $config->setMetadataCacheImpl(new VoidCache());
-
-        $eventManager = $eventManager ?? new EventManager();
-
-        return new static($client, $config, $eventManager);
     }
 
     /**

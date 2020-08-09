@@ -576,10 +576,11 @@ class Builder
     /**
      * Allows adding an arbitrary stage to the pipeline
      *
+     * @param Stage $stage
      * @return Stage The method returns the stage given as an argument
      */
-    public function addStage(Stage $stage) : Stage
-    {
+    public function addStage(Stage $stage) : Stage {
+
         $this->stages[] = $stage;
 
         return $stage;
@@ -595,6 +596,69 @@ class Builder
                     (new QueryExpr($this->dm))->field($this->class->softDeleteField)->gt(new UTCDateTime())
                 );
         }
+
+        return $this;
+    }
+
+    public function paginate(int $perPage = 100,
+                             int $page = 1,
+                             array $include = [],
+                             array $exclude = [],
+                             string $orderBy = null,
+                             string $order = null): self {
+
+//        $exclude[] = '_id';
+
+        if($orderBy && $order) {
+
+            $this->sort($orderBy, $order);
+        }
+
+//        $dateFields = array_filter($this->class->fieldMappings, function ($field) {
+//            return isset($field['type']) && $field['type'] === 'date';
+//        });
+
+//        $addFields = $this->addFields()
+//            ->field('id', true)
+//            ->toString('$_id');
+
+//        foreach ($dateFields as $dateField) {
+//
+//            $addFields->field($dateField['fieldName'])
+//                ->dateToString('%Y-%m-%d %H:%M:%S', "$" . $dateField['fieldName'], 'Asia/Tehran');
+//        }
+
+        if(count($include) > 0 || count($exclude) > 0) {
+
+            $this->project()
+                ->includeFields($include)
+                ->excludeFields($exclude);
+        }
+
+        $this->group()
+            ->field('_id')
+            ->expression(null)
+            ->field('total')
+            ->sum(1)
+            ->field('results')
+            ->push('$$ROOT');
+
+//        $this->addFields()
+//            ->field('page');
+
+        $this->project()
+            ->excludeFields([ '_id' ])
+            ->includeFields([ 'total' ])
+            ->field('results')
+            ->slice('$results', $perPage, $perPage * ($page - 1))
+            ->field('ssss')
+            ->map('$results', 'id', '$id');
+
+        $this->addFields()
+            ->field('page')
+            ->expression($page)
+            ->field('per_page')
+            ->expression($perPage);
 
         return $this;
     }

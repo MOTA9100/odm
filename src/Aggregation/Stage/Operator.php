@@ -275,12 +275,14 @@ abstract class Operator extends Stage
      * @see http://docs.mongodb.org/manual/reference/operator/aggregation/dateToString/
      * @see Expr::dateToString
      *
-     * @param string     $format
+     * @param string $format
      * @param mixed|Expr $expression
+     * @param null $timezone
+     * @return Operator
      */
-    public function dateToString($format, $expression) : self
+    public function dateToString($format, $expression, $timezone = null) : self
     {
-        $this->expr->dateToString($format, $expression);
+        $this->expr->dateToString($format, $expression, $timezone);
 
         return $this;
     }

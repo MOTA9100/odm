@@ -341,10 +341,17 @@ class Expr
      *
      * @see http://docs.mongodb.org/manual/reference/operator/aggregation/dateToString/
      *
+     * @param string $format
      * @param mixed|self $expression
+     * @param string $timezone
+     * @return Expr
      */
-    public function dateToString(string $format, $expression) : self
+    public function dateToString(string $format, $expression, string $timezone = null) : self
     {
+        if($timezone) {
+            return $this->operator('$dateToString', ['format' => $format, 'date' => $expression, 'timezone' => $timezone]);
+        }
+
         return $this->operator('$dateToString', ['format' => $format, 'date' => $expression]);
     }
 
