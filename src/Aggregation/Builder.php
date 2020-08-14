@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MOTA9100\ODM\Aggregation;
 
+use Illuminate\Support\Str;
 use MongoDB\BSON\UTCDateTime;
 use MOTA9100\ODM\DocumentManager;
 use MOTA9100\ODM\Iterator\CachingIterator;
@@ -442,10 +443,12 @@ class Builder
      * the input documents or newly computed fields.
      *
      * @see http://docs.mongodb.org/manual/reference/operator/aggregation/project/
+     * @param array $projection
+     * @return Stage\Project
      */
-    public function project() : Stage\Project
+    public function project(array $projection = null) : Stage\Project
     {
-        $stage = new Stage\Project($this);
+        $stage = new Stage\Project($this, $projection);
         $this->addStage($stage);
 
         return $stage;
@@ -605,28 +608,13 @@ class Builder
                              array $include = [],
                              array $exclude = [],
                              string $orderBy = null,
-                             string $order = null): self {
-
-//        $exclude[] = '_id';
+                             string $order = null,
+                             int $embedLimitation = 50): self {
 
         if($orderBy && $order) {
 
             $this->sort($orderBy, $order);
         }
-
-//        $dateFields = array_filter($this->class->fieldMappings, function ($field) {
-//            return isset($field['type']) && $field['type'] === 'date';
-//        });
-
-//        $addFields = $this->addFields()
-//            ->field('id', true)
-//            ->toString('$_id');
-
-//        foreach ($dateFields as $dateField) {
-//
-//            $addFields->field($dateField['fieldName'])
-//                ->dateToString('%Y-%m-%d %H:%M:%S', "$" . $dateField['fieldName'], 'Asia/Tehran');
-//        }
 
         if(count($include) > 0 || count($exclude) > 0) {
 
@@ -638,21 +626,41 @@ class Builder
         $this->group()
             ->field('_id')
             ->expression(null)
-            ->field('total')
-            ->sum(1)
             ->field('results')
-            ->push('$$ROOT');
-
-//        $this->addFields()
-//            ->field('page');
+            ->push('$$ROOT')
+            ->field('total')
+            ->sum(1);
 
         $this->project()
-            ->excludeFields([ '_id' ])
-            ->includeFields([ 'total' ])
+            ->includeFields(['total'])
             ->field('results')
-            ->slice('$results', $perPage, $perPage * ($page - 1))
-            ->field('ssss')
-            ->map('$results', 'id', '$id');
+            ->slice('$results', $perPage, $perPage * ($page - 1));
+
+        $embeds = array_keys($this->class->associationMappings);
+
+        $projections = $this->paginateProjections('results', array_diff($embeds, $exclude), $embedLimitation);
+
+        if(count($projections['totals']) > 0) {
+
+            $this->project($projections['totals']);
+        }
+
+        foreach ($projections['slices'] as $slice) {
+
+            $this->project($slice);
+        }
+
+        $this->project(
+            array_merge(
+                [
+                    '_id' => 0,
+                    'total' => 1,
+                ],
+                $projections['converts']
+            )
+        );
+
+        $this->project($projections['exclude']);
 
         $this->addFields()
             ->field('page')
@@ -700,5 +708,176 @@ class Builder
         $cursor = $this->rewindable ? new CachingIterator($cursor) : new UnrewindableIterator($cursor);
 
         return $cursor;
+    }
+
+        private function paginateProjections(string $as, array $embeds = null, int $embedCount = 1, ClassMetadata $class = null) {
+
+        if(is_null($class)) {
+
+            $class = $this->class;
+        }
+
+        $fields = explode('.', $as);
+        $fieldsCount = count($fields);
+        $field = end($fields);
+        $singular = Str::singular($field);
+        $singularWithSign = '$$' . $singular;
+
+        $dateFields = array_filter($class->fieldMappings, function ($f) {
+            return isset($f['type']) && $f['type'] === 'date';
+        });
+
+        $totals = [];
+
+        foreach ($embeds as $embed) {
+
+            $totals['total_' . $embed] = [
+                '$size' => $singularWithSign . '.' . $embed
+            ];
+        }
+
+        $converts = [
+            "id" => [
+                '$toString' => $singularWithSign . '._id'
+            ]
+        ];
+
+        foreach ($dateFields as $dateField) {
+
+            $converts[$dateField['fieldName']] = [
+                '$dateToString' => [
+                    'format' => '%Y-%m-%d %H:%M:%S',
+                    'date'  => $singularWithSign . '.' . $dateField['fieldName'],
+                    'timezone' => 'Asia/Tehran'
+                ]
+            ];
+        }
+
+        $slices = [];
+
+        foreach ($embeds as $embed) {
+
+            $slices[][$embed] = [
+                '$slice' => [
+                    $singularWithSign . '.' . $embed, 0, $embedCount
+                ]
+            ];
+        }
+
+        if(count($slices) > 0) {
+
+            $reverse = array_reverse($fields);
+            for($in = 0; $in < $fieldsCount; $in++) {
+                $str = $reverse[$in];
+
+                $singularStr = Str::singular($str);
+                $singularStrWithSign = '$$' . $singularStr;
+
+                if($in === ($fieldsCount - 1)) {
+                    $inputStr = '$' . $str;
+                } else {
+                    $inputStr = '$$' . Str::singular($reverse[1 + $in]) . '.' . $reverse[0 + $in];
+                }
+
+                $slices = [
+                    [
+                        $str => [
+                            '$map' => [
+                                'input' => $inputStr,
+                                'as' => $singularStr,
+                                'in' => [
+                                    '$mergeObjects' => [
+                                        $singularStrWithSign,
+                                        $slices[0]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]
+                ];
+            }
+        }
+
+        $excludes = [
+            $field => [
+                '_id' => 0
+            ]
+        ];
+
+        if($embeds) {
+
+            foreach ($embeds as $embed) {
+
+                if($targetDocument = $class->associationMappings[$embed]['targetDocument'] ?? null) {
+
+                    $embedClass = $this->dm->getClassMetadata($targetDocument);
+                    $embedEmbeds = array_keys($embedClass->associationMappings);
+
+                    $embedCount = (int) ceil($embedCount / 2);
+                    $embedCount = $embedCount < 1 ? 1 : $embedCount;
+
+                    $data = $this->paginateProjections($as . '.' . $embed, $embedEmbeds, $embedCount, $embedClass);
+
+                    $slices = array_merge(
+                        $slices,
+                        $data['slices']
+                    );
+
+                    $totals = array_merge(
+                        $totals,
+                        $data['totals']
+                    );
+
+                    $converts = array_merge(
+                        $converts,
+                        $data['converts']
+                    );
+
+                    $excludes[$field] = array_merge(
+                        $excludes[$field],
+                        $data['exclude']
+                    );
+                }
+            }
+        }
+
+        if($fieldsCount > 1) {
+            $input = '$$' . Str::singular($fields[$fieldsCount - 2]) . '.' . $fields[$fieldsCount - 1];
+        } else {
+            $input = '$' . $field;
+        }
+
+        return [
+            'totals' => count($totals) > 0 ? [
+                $field => [
+                    '$map' => [
+                        'input' => $input,
+                        'as' => $singular,
+                        'in' => [
+                            '$mergeObjects' => [
+                                $singularWithSign,
+                                $totals
+                            ]
+                        ]
+                    ]
+                ]
+            ] : [],
+            'slices' => $slices,
+            'converts' => [
+                $field => [
+                    '$map' => [
+                        'input' => $input,
+                        'as' => $singular,
+                        'in' => [
+                            '$mergeObjects' => [
+                                $singularWithSign,
+                                $converts
+                            ]
+                        ]
+                    ]
+                ]
+            ],
+            'exclude' => $excludes
+        ];
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MOTA9100\ODM\Aggregation\Stage;
 
+use MOTA9100\ODM\Aggregation\Builder;
 use MOTA9100\ODM\Aggregation\Expr;
 use function func_get_args;
 
@@ -12,13 +13,23 @@ use function func_get_args;
  */
 class Project extends Operator
 {
+
+    private $projections;
+
+    public function __construct(Builder $builder, array $projections = null) {
+
+        parent::__construct($builder);
+
+        $this->projections = $projections;
+    }
+
     /**
      * {@inheritdoc}
      */
     public function getExpression() : array
     {
         return [
-            '$project' => $this->expr->getExpression(),
+            '$project' => $this->projections ?? $this->expr->getExpression(),
         ];
     }
 
