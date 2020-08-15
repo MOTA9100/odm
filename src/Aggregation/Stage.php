@@ -348,4 +348,40 @@ abstract class Stage
 
         return $this->builder->addSoftDeleteFilter();
     }
+
+    public function paginate(int $perPage = 100,
+                             int $page = 1,
+                             array $include = [],
+                             array $exclude = [],
+                             string $orderBy = null,
+                             string $order = null,
+                             int $embedLimitation = 50) {
+
+        return $this->builder->paginate($perPage, $page, $include, $exclude, $orderBy, $order, $embedLimitation);
+    }
+
+    public function excludeEmbeds() {
+
+        return $this->builder->excludeEmbeds();
+    }
+
+    public function globalInclude(array $include) {
+
+        return $this->builder->globalInclude($include);
+    }
+
+    public function globalExclude(array $exclude) {
+
+        return $this->builder->globalExclude($exclude);
+    }
+
+    public function globalProject() {
+
+        return $this->builder->globalProject();
+    }
+
+    public function setClass(string $documentName) {
+
+        return $this->builder->setClass($documentName);
+    }
 }

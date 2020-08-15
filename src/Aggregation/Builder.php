@@ -69,6 +69,10 @@ class Builder
     /** @var bool */
     private $withTrashed = false;
 
+    private $exclude = [];
+
+    private $include = [];
+
     /**
      *
      * Create a new aggregation builder.
@@ -90,6 +94,13 @@ class Builder
         $this->withTrashed = true;
 
         return$this;
+    }
+
+    public function setClass(string $documentName): self {
+
+        $this->class = $this->dm->getClassMetadata($documentName);
+
+        return $this;
     }
 
     /**
@@ -605,8 +616,6 @@ class Builder
 
     public function paginate(int $perPage = 100,
                              int $page = 1,
-                             array $include = [],
-                             array $exclude = [],
                              string $orderBy = null,
                              string $order = null,
                              int $embedLimitation = 50): self {
@@ -614,13 +623,6 @@ class Builder
         if($orderBy && $order) {
 
             $this->sort($orderBy, $order);
-        }
-
-        if(count($include) > 0 || count($exclude) > 0) {
-
-            $this->project()
-                ->includeFields($include)
-                ->excludeFields($exclude);
         }
 
         $this->group()
@@ -638,7 +640,7 @@ class Builder
 
         $embeds = array_keys($this->class->associationMappings);
 
-        $projections = $this->paginateProjections('results', array_diff($embeds, $exclude), $embedLimitation);
+        $projections = $this->paginateProjections('results', $embeds, $embedLimitation);
 
         if(count($projections['totals']) > 0) {
 
@@ -667,6 +669,55 @@ class Builder
             ->expression($page)
             ->field('per_page')
             ->expression($perPage);
+
+        return $this;
+    }
+
+    /**
+     * @return $this
+     */
+    public function excludeEmbeds(): self {
+
+        $excludes = is_array($this->class->associationMappings) ? array_keys($this->class->associationMappings) : [];
+
+        if(count($excludes) > 0) {
+
+            $this->globalExclude($excludes);
+        }
+
+        return $this;
+    }
+
+    public function globalInclude(array $include): self {
+
+        $this->include = array_unique(array_merge($this->include, $include));
+
+        return $this;
+    }
+
+    public function globalExclude(array $exclude): self {
+
+        $this->exclude = array_unique(array_merge($this->exclude, $exclude));
+
+        return $this;
+    }
+
+    public function globalProject(): self {
+
+        $include = array_diff($this->include, $this->exclude);
+        $exclude = array_diff($this->exclude, $this->include);
+
+        if(count($include)) {
+
+            $this->project()
+                ->includeFields($include);
+        }
+
+        if(count($exclude)) {
+
+            $this->project()
+                ->excludeFields($exclude);
+        }
 
         return $this;
     }
@@ -710,7 +761,7 @@ class Builder
         return $cursor;
     }
 
-        private function paginateProjections(string $as, array $embeds = null, int $embedCount = 1, ClassMetadata $class = null) {
+    private function paginateProjections(string $as, array $embeds = null, int $embedCount = 1, ClassMetadata $class = null) {
 
         if(is_null($class)) {
 
@@ -723,24 +774,40 @@ class Builder
         $singular = Str::singular($field);
         $singularWithSign = '$$' . $singular;
 
+        $embeds = array_diff($embeds, $this->exclude);
+
         $dateFields = array_filter($class->fieldMappings, function ($f) {
             return isset($f['type']) && $f['type'] === 'date';
         });
 
         $totals = [];
 
-        foreach ($embeds as $embed) {
-
-            $totals['total_' . $embed] = [
-                '$size' => $singularWithSign . '.' . $embed
-            ];
-        }
+        $slices = [];
 
         $converts = [
             "id" => [
                 '$toString' => $singularWithSign . '._id'
             ]
         ];
+
+        $excludes = [
+            $field => [
+                '_id' => 0
+            ]
+        ];
+
+        foreach ($embeds as $embed) {
+
+            $totals['total_' . $embed] = [
+                '$size' => $singularWithSign . '.' . $embed
+            ];
+
+            $slices[][$embed] = [
+                '$slice' => [
+                    $singularWithSign . '.' . $embed, 0, $embedCount
+                ]
+            ];
+        }
 
         foreach ($dateFields as $dateField) {
 
@@ -749,17 +816,6 @@ class Builder
                     'format' => '%Y-%m-%d %H:%M:%S',
                     'date'  => $singularWithSign . '.' . $dateField['fieldName'],
                     'timezone' => 'Asia/Tehran'
-                ]
-            ];
-        }
-
-        $slices = [];
-
-        foreach ($embeds as $embed) {
-
-            $slices[][$embed] = [
-                '$slice' => [
-                    $singularWithSign . '.' . $embed, 0, $embedCount
                 ]
             ];
         }
@@ -797,12 +853,6 @@ class Builder
                 ];
             }
         }
-
-        $excludes = [
-            $field => [
-                '_id' => 0
-            ]
-        ];
 
         if($embeds) {
 
