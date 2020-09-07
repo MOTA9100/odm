@@ -616,6 +616,8 @@ class Builder
 
     public function paginate(int $perPage = 100,
                              int $page = 1,
+                             ?int $skip = null,
+                             ?int $take = null,
                              string $orderBy = null,
                              string $order = null,
                              int $embedLimitation = 50): self {
@@ -633,10 +635,19 @@ class Builder
             ->field('total')
             ->sum(1);
 
-        $this->project()
-            ->includeFields(['total'])
-            ->field('results')
-            ->slice('$results', $perPage, $perPage * ($page - 1));
+        if($skip && $take) {
+
+            $this->project()
+                ->includeFields(['total'])
+                ->field('results')
+                ->slice('$results', $take, $skip);
+        } else {
+
+            $this->project()
+                ->includeFields(['total'])
+                ->field('results')
+                ->slice('$results', $perPage, $perPage * ($page - 1));
+        }
 
         $embeds = array_keys($this->class->associationMappings);
 

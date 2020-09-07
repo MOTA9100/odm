@@ -351,13 +351,13 @@ abstract class Stage
 
     public function paginate(int $perPage = 100,
                              int $page = 1,
-                             array $include = [],
-                             array $exclude = [],
+                             ?int $skip = null,
+                             ?int $take = null,
                              string $orderBy = null,
                              string $order = null,
                              int $embedLimitation = 50) {
 
-        return $this->builder->paginate($perPage, $page, $include, $exclude, $orderBy, $order, $embedLimitation);
+        return $this->builder->paginate($perPage, $page, $skip, $take, $orderBy, $order, $embedLimitation);
     }
 
     public function excludeEmbeds() {

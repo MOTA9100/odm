@@ -9,7 +9,7 @@ use MOTA9100\ODM\Mapping\Annotations as ODM;
 trait Timestamps {
 
     /**
-     * @var DateTime $created_at
+     * @var UTCDateTime $created_at
      * @ODM\Field(
      *     type="date"
      * )
@@ -17,7 +17,7 @@ trait Timestamps {
     protected $created_at;
 
     /**
-     * @var DateTime $updated_at
+     * @var UTCDateTime $updated_at
      * @ODM\Field(
      *     type="date"
      * )
@@ -41,18 +41,18 @@ trait Timestamps {
     }
 
     /**
-     * @param DateTime $created_at
+     * @param DateTime $createdAt
      */
-    public function setCreatedAt(DateTime $created_at): void {
+    public function setCreatedAt(DateTime $createdAt): void {
 
-        $this->created_at = new UTCDateTime($created_at->getTimestamp() * 1000);
+        $this->created_at = new UTCDateTime($createdAt->getTimestamp() * 1000);
     }
 
     /**
-     * @param DateTime $updated_at
+     * @param DateTime $updatedAt
      */
-    public function setUpdatedAt(DateTime $updated_at): void {
+    public function setUpdatedAt(DateTime $updatedAt): void {
 
-        $this->updated_at = new UTCDateTime($updated_at->getTimestamp() * 1000);
+        $this->updated_at = new UTCDateTime($updatedAt->getTimestamp() * 1000);
     }
 }
