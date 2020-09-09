@@ -635,7 +635,7 @@ class Builder
             ->field('total')
             ->sum(1);
 
-        if($skip && $take) {
+        if(!is_null($skip) && !is_null($take)) {
 
             $this->project()
                 ->includeFields(['total'])
