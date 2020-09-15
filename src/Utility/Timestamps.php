@@ -29,6 +29,11 @@ trait Timestamps {
      */
     public function getCreatedAt(): ?DateTime {
 
+        if($this->created_at instanceof UTCDateTime) {
+
+            return $this->created_at->toDateTime();
+        }
+
         return $this->created_at;
     }
 
@@ -36,6 +41,11 @@ trait Timestamps {
      * @return DateTime|null
      */
     public function getUpdatedAt(): ?DateTime {
+
+        if($this->updated_at instanceof UTCDateTime) {
+
+            return $this->updated_at->toDateTime();
+        }
 
         return $this->updated_at;
     }

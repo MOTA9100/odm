@@ -34,8 +34,8 @@ use function sprintf;
 /**
  * Fluent interface for building aggregation pipelines.
  */
-class Builder
-{
+class Builder {
+
     /**
      * The DocumentManager instance for this query
      *
@@ -614,72 +614,23 @@ class Builder
         return $this;
     }
 
-    public function paginate(int $perPage = 100,
-                             int $page = 1,
-                             ?int $skip = null,
-                             ?int $take = null,
-                             string $orderBy = null,
-                             string $order = null,
-                             int $embedLimitation = 50): self {
+    public function paginate(int $skip = null, int $take = 100, string $orderBy = null, string $order = null): self {
 
-        if($orderBy && $order) {
 
-            $this->sort($orderBy, $order);
+
+        return $this;
+    }
+
+    public function excludeOneEmbeds(): self {
+
+        $oneEmbeds = array_filter($this->class->associationMappings, function ($embedMap) {
+            return $embedMap['type'] === 'one';
+        });
+
+        if(count($oneEmbeds) > 0) {
+
+            $this->globalExclude(array_keys($oneEmbeds));
         }
-
-        $this->group()
-            ->field('_id')
-            ->expression(null)
-            ->field('results')
-            ->push('$$ROOT')
-            ->field('total')
-            ->sum(1);
-
-        if(!is_null($skip) && !is_null($take)) {
-
-            $this->project()
-                ->includeFields(['total'])
-                ->field('results')
-                ->slice('$results', $take, $skip);
-        } else {
-
-            $this->project()
-                ->includeFields(['total'])
-                ->field('results')
-                ->slice('$results', $perPage, $perPage * ($page - 1));
-        }
-
-        $embeds = array_keys($this->class->associationMappings);
-
-        $projections = $this->paginateProjections('results', $embeds, $embedLimitation);
-
-        if(count($projections['totals']) > 0) {
-
-            $this->project($projections['totals']);
-        }
-
-        foreach ($projections['slices'] as $slice) {
-
-            $this->project($slice);
-        }
-
-        $this->project(
-            array_merge(
-                [
-                    '_id' => 0,
-                    'total' => 1,
-                ],
-                $projections['converts']
-            )
-        );
-
-        $this->project($projections['exclude']);
-
-        $this->addFields()
-            ->field('page')
-            ->expression($page)
-            ->field('per_page')
-            ->expression($perPage);
 
         return $this;
     }
@@ -687,18 +638,24 @@ class Builder
     /**
      * @return $this
      */
-    public function excludeEmbeds(): self {
+    public function excludeManyEmbeds(): self {
 
-        $excludes = is_array($this->class->associationMappings) ? array_keys($this->class->associationMappings) : [];
+        $manyEmbeds = array_filter($this->class->associationMappings, function ($embedMap) {
+            return $embedMap['type'] === 'many';
+        });
 
-        if(count($excludes) > 0) {
+        if(count($manyEmbeds) > 0) {
 
-            $this->globalExclude($excludes);
+            $this->globalExclude(array_keys($manyEmbeds));
         }
 
         return $this;
     }
 
+    /**
+     * @param array $include
+     * @return $this
+     */
     public function globalInclude(array $include): self {
 
         $this->include = array_unique(array_merge($this->include, $include));
@@ -706,6 +663,10 @@ class Builder
         return $this;
     }
 
+    /**
+     * @param array $exclude
+     * @return $this
+     */
     public function globalExclude(array $exclude): self {
 
         $this->exclude = array_unique(array_merge($this->exclude, $exclude));
@@ -713,6 +674,9 @@ class Builder
         return $this;
     }
 
+    /**
+     * @return $this
+     */
     public function globalProject(): self {
 
         $include = array_diff($this->include, $this->exclude);
@@ -720,14 +684,12 @@ class Builder
 
         if(count($include)) {
 
-            $this->project()
-                ->includeFields($include);
+            $this->project()->includeFields($include);
         }
 
         if(count($exclude)) {
 
-            $this->project()
-                ->excludeFields($exclude);
+            $this->project()->excludeFields($exclude);
         }
 
         return $this;
@@ -735,6 +697,9 @@ class Builder
 
     /**
      * Applies filters and discriminator queries to the pipeline
+     *
+     * @param array $query
+     * @return array
      */
     private function applyFilters(array $query) : array {
 
@@ -756,8 +721,8 @@ class Builder
         return $this->dm->getUnitOfWork()->getDocumentPersister($this->class->name);
     }
 
-    private function prepareIterator(Cursor $cursor) : Iterator
-    {
+    private function prepareIterator(Cursor $cursor) : Iterator {
+
         $class = null;
         if ($this->hydrationClass) {
             $class = $this->dm->getClassMetadata($this->hydrationClass);

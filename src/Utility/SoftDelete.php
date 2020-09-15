@@ -21,7 +21,12 @@ trait SoftDelete {
      */
     public function getDeletedAt(): ?DateTime {
 
-        return $this->deleted_at ? $this->deleted_at->toDateTime() : null;
+        if($this->deleted_at instanceof UTCDateTime) {
+
+            return $this->deleted_at->toDateTime();
+        }
+
+        return $this->deleted_at;
     }
 
     /**

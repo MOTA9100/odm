@@ -349,20 +349,14 @@ abstract class Stage
         return $this->builder->addSoftDeleteFilter();
     }
 
-    public function paginate(int $perPage = 100,
-                             int $page = 1,
-                             ?int $skip = null,
-                             ?int $take = null,
-                             string $orderBy = null,
-                             string $order = null,
-                             int $embedLimitation = 50) {
+    public function excludeOneEmbeds() {
 
-        return $this->builder->paginate($perPage, $page, $skip, $take, $orderBy, $order, $embedLimitation);
+        return $this->builder->excludeOneEmbeds();
     }
 
-    public function excludeEmbeds() {
+    public function excludeManyEmbeds() {
 
-        return $this->builder->excludeEmbeds();
+        return $this->builder->excludeManyEmbeds();
     }
 
     public function globalInclude(array $include) {
