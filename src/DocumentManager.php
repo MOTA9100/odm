@@ -471,8 +471,19 @@ class DocumentManager implements ObjectManager
         if (! is_object($document)) {
             throw new InvalidArgumentException(gettype($document));
         }
-        $this->errorIfClosed();
-        $this->unitOfWork->remove($document);
+
+        $class = $this->getClassMetadata(get_class($document));
+
+        if($class->softDeleteField) {
+
+            $setter = 'set' . str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $class->softDeleteField)));
+            $document->$setter(new \DateTime());
+            $this->persist($document);
+            $this->flush();
+        } else {
+            $this->errorIfClosed();
+            $this->unitOfWork->remove($document);
+        }
     }
 
     /**

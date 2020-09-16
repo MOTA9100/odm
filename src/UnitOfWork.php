@@ -1660,16 +1660,8 @@ final class UnitOfWork implements PropertyChangedListener
      */
     public function remove(object $document) {
 
-        $class = $this->dm->getClassMetadata(get_class($document));
-
-        if ($class->softDeleteField) {
-            $setter = 'set' . str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $class->softDeleteField)));
-            $document->$setter(new \DateTime());
-            $this->persist($document);
-        } else {
-            $visited = [];
-            $this->doRemove($document, $visited);
-        }
+        $visited = [];
+        $this->doRemove($document, $visited);
     }
 
     /**
